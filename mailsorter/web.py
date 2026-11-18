@@ -15,7 +15,7 @@ from .cleaner import IsolatedCleaner
 from .gmail import AccountAccess, FixedAccess, GmailBusy, GmailClient, GmailError, MessageGone, is_message_id
 from .google import (GMAIL_SCOPE, GoogleEndpoints, GoogleError, GoogleUnreachable, OAuthClient, SignInExpired,
                      SignInRefused, TokenGrant, new_pkce_pair, send)
-from .limits import RateLimiter, client_address
+from .limits import RateLimiter, client_address, proxy_networks
 from .present import Presenter
 from .sanitize import as_document
 from .secrets_store import SignInSeal, TokenUnreadable, csrf_matches, csrf_token
@@ -121,6 +121,7 @@ def create_app(settings: Settings, store: AccountStore, secret: bytes, endpoints
     services = Services(settings, store, endpoints, transport, sleep, clock, monotonic, cleaner or IsolatedCleaner())
     seal = SignInSeal(secret, clock)
     auth_limiter = RateLimiter(AUTH_REQUESTS_PER_WINDOW, AUTH_WINDOW_SECONDS, clock=clock)
+    trusted_proxies = proxy_networks(settings.trusted_proxies)
     session_cookie = cookie_name(SESSION_COOKIE, settings.secure_cookies)
     sign_in_cookie = cookie_name(SIGN_IN_COOKIE, settings.secure_cookies)
     _forget_unlisted_accounts(settings, store)
@@ -173,8 +174,8 @@ def create_app(settings: Settings, store: AccountStore, secret: bytes, endpoints
 
     @app.before_request
     def identify_and_guard_writes():
-        if request.path.startswith("/auth/") and not auth_limiter.allow(client_address(request.remote_addr,
-                                                                                       request.headers)):
+        visitor = client_address(request.remote_addr, request.headers, trusted_proxies)
+        if request.path.startswith("/auth/") and not auth_limiter.allow(visitor):
             return slow_down()
         g.session_id = request.cookies.get(session_cookie) or ""
         g.email = signed_in_email()

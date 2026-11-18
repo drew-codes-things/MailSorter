@@ -19,6 +19,7 @@ TOKEN_KEY = base64.urlsafe_b64encode(b"t" * 32)
 DREW = "drew@example.com"
 FRIEND = "friend@example.com"
 PUBLIC_URL = "http://localhost:8101"
+CADDY_ON_THIS_HOST = ("127.0.0.1", "::1")
 
 
 class FakeClock:
@@ -81,7 +82,7 @@ def google(clock):
 @pytest.fixture
 def settings(tmp_path) -> Settings:
     return Settings(data_dir=tmp_path / "data", public_url=PUBLIC_URL, google_client_id=CLIENT_ID,
-                    google_client_secret=CLIENT_SECRET)
+                    google_client_secret=CLIENT_SECRET, trusted_proxies=CADDY_ON_THIS_HOST)
 
 
 @pytest.fixture

@@ -2,15 +2,25 @@ import ipaddress
 import threading
 import time
 
-from .config import is_loopback
-
 MAX_TRACKED_ADDRESSES = 10_000
 CLOUDFLARE_CLIENT_HEADER = "CF-Connecting-IP"
 
 
-def client_address(peer: str | None, headers) -> str:
+def proxy_networks(entries) -> tuple:
+    return tuple(ipaddress.ip_network(entry, strict=False) for entry in entries)
+
+
+def is_trusted_proxy(peer: str, trusted_proxies) -> bool:
+    try:
+        address = ipaddress.ip_address(peer)
+    except ValueError:
+        return False
+    return any(address in network for network in trusted_proxies)
+
+
+def client_address(peer: str | None, headers, trusted_proxies=()) -> str:
     peer = peer or ""
-    if not is_loopback(peer):
+    if not is_trusted_proxy(peer, trusted_proxies):
         return peer
     forwarded = (headers.get(CLOUDFLARE_CLIENT_HEADER) or "").strip()
     try:

@@ -3,7 +3,7 @@ import pytest
 from mailsorter.config import BAD_CLIENT_ID_TEXT, BAD_CLIENT_SECRET_TEXT, NOT_SET_UP_TEXT, ConfigError, load_settings
 
 NAMES = ("PUBLIC_URL", "BIND_HOST", "PORT", "DATA_DIR", "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "TOKEN_KEY_FILE",
-         "ALLOWED_ACCOUNTS", "SECRET_KEY")
+         "ALLOWED_ACCOUNTS", "SECRET_KEY", "TRUSTED_PROXIES")
 
 
 @pytest.fixture(autouse=True)
@@ -68,3 +68,21 @@ def test_the_token_key_file_defaults_to_the_data_folder(monkeypatch, tmp_path):
     assert load_settings().key_path == tmp_path / "data" / "token.key"
     monkeypatch.setenv("TOKEN_KEY_FILE", "/etc/mail-sorter/token.key")
     assert str(load_settings().key_path) == "/etc/mail-sorter/token.key"
+
+
+def test_no_proxy_is_trusted_by_default_and_listed_ones_are_kept(monkeypatch):
+    assert load_settings().trusted_proxies == ()
+    monkeypatch.setenv("TRUSTED_PROXIES", "127.0.0.1, ::1,fd00::/8, 203.0.113.5")
+    assert load_settings().trusted_proxies == ("127.0.0.1", "::1", "fd00::/8", "203.0.113.5")
+
+
+@pytest.mark.parametrize("entry, problem", [
+    ("caddy", "not an address or network"),
+    ("192.0.2.16/24", "host bits set"),
+    ("0.0.0.0/0", "reaches public addresses"),
+    ("::/0", "reaches public addresses"),
+])
+def test_a_trusted_proxy_entry_that_trusts_too_much_stops_the_app(monkeypatch, entry, problem):
+    monkeypatch.setenv("TRUSTED_PROXIES", entry)
+    with pytest.raises(ConfigError, match=problem):
+        load_settings()

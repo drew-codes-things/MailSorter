@@ -35,6 +35,7 @@ class Settings:
     token_key_file: Path | None = None
     allowed_accounts: tuple[str, ...] = ()
     secret_key: str = ""
+    trusted_proxies: tuple[str, ...] = ()
 
     @property
     def database_path(self) -> Path:
@@ -114,6 +115,30 @@ def _accounts(name: str) -> tuple[str, ...]:
     return entries
 
 
+def _proxy_list(name: str) -> tuple[str, ...]:
+    entries = tuple(part.strip() for part in _text(name, "").split(",") if part.strip())
+    for entry in entries:
+        try:
+            network = ipaddress.ip_network(entry, strict=False)
+        except ValueError as error:
+            raise ConfigError(f"{name} has {entry!r}, which is not an address or network") from error
+        if _has_host_bits(entry):
+            raise ConfigError(f"{name} has {entry!r}, which has host bits set; write {network} for the network "
+                              f"or {entry.split('/')[0]} for one address")
+        if network.num_addresses > 1 and not network.is_private:
+            raise ConfigError(f"{name} has {entry!r}, which reaches public addresses; list the proxy's own address "
+                              "or a private network")
+    return entries
+
+
+def _has_host_bits(entry: str) -> bool:
+    try:
+        ipaddress.ip_network(entry, strict=True)
+    except ValueError:
+        return True
+    return False
+
+
 def read_env_file(path: Path = ENV_FILE) -> None:
     if not path.is_file():
         return
@@ -140,4 +165,5 @@ def load_settings() -> Settings:
         token_key_file=Path(key_file).resolve() if key_file else None,
         allowed_accounts=_accounts("ALLOWED_ACCOUNTS"),
         secret_key=_text("SECRET_KEY", ""),
+        trusted_proxies=_proxy_list("TRUSTED_PROXIES"),
     )

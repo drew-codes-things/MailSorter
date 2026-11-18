@@ -3,7 +3,7 @@ set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SITE_ENV="${SITE_ENV:-$REPO/deploy/site.env}"
-SITE_NAMES=(PROXMOX CT SITE_HOST)
+SITE_NAMES=(PROXMOX CT SITE_HOST TUNNEL_PEER)
 SITE_VALUE_PATTERN='^[A-Za-z0-9][A-Za-z0-9._:-]*$'
 CT_SCRIPT=/root/mail-sorter-deploy-ct.sh
 
@@ -77,6 +77,7 @@ CADDY_BLOCK_BEGIN="# >>> mail-sorter block, added and removed by the mail-sorter
 CADDY_BLOCK_END="# <<< mail-sorter block"
 CADDY_BLOCK_SOURCE="$APP/deploy/Caddyfile.mail-sorter"
 SITE_HOST="${SITE_HOST:?SITE_HOST is missing: deploy.sh passes it from deploy/site.env}"
+TUNNEL_PEER="${TUNNEL_PEER:?TUNNEL_PEER is missing: deploy.sh passes it from deploy/site.env}"
 SERVICE=mail-sorter
 SERVICE_USER=mail-sorter
 KEPT_CODE_COPIES=3
@@ -215,12 +216,26 @@ ensure_user_and_folders() {
 }
 
 fill_in_site_values() {
-  sed -e "s/__SITE_HOST__/$SITE_HOST/g" "$@"
+  sed -e "s/__SITE_HOST__/$SITE_HOST/g" -e "s/__TUNNEL_PEER__/$TUNNEL_PEER/g" "$@"
+}
+
+add_missing_trusted_proxies() {
+  local line
+  line="$(grep '^TRUSTED_PROXIES=' "$APP/deploy/mail-sorter.env")"
+  if [ -s "$ENV_FILE" ] && [ -n "$(tail -c 1 "$ENV_FILE")" ]; then
+    printf '\n' >> "$ENV_FILE"
+  fi
+  printf '%s\n' "$line" >> "$ENV_FILE"
+  echo "env: $ENV_FILE kept, with $line added (the proxies whose CF-Connecting-IP is believed)"
 }
 
 install_env_file() {
   if [ -f "$ENV_FILE" ]; then
-    echo "env: $ENV_FILE kept as it is"
+    if grep -q '^TRUSTED_PROXIES=' "$ENV_FILE"; then
+      echo "env: $ENV_FILE kept as it is"
+    else
+      add_missing_trusted_proxies
+    fi
     return
   fi
   install -m 640 -o root -g "$SERVICE_USER" /dev/null "$ENV_FILE"
@@ -653,7 +668,7 @@ push_ct_script() {
 }
 
 in_ct() {
-  ssh -o BatchMode=yes "$PROXMOX" "pct exec $CT -- env SITE_HOST=$SITE_HOST bash $CT_SCRIPT $*"
+  ssh -o BatchMode=yes "$PROXMOX" "pct exec $CT -- env SITE_HOST=$SITE_HOST TUNNEL_PEER=$TUNNEL_PEER bash $CT_SCRIPT $*"
 }
 
 other_deploys_running() {
@@ -700,7 +715,7 @@ ask_for_google_client() {
   read -r -p "Google OAuth client ID: " client_id
   read -r -s -p "Google OAuth client secret (not shown): " client_secret
   echo
-  printf '%s\n%s\n' "$client_id" "$client_secret" | ssh -o BatchMode=yes "$PROXMOX" "pct exec $CT -- env SITE_HOST=$SITE_HOST bash $CT_SCRIPT google-set"
+  printf '%s\n%s\n' "$client_id" "$client_secret" | ssh -o BatchMode=yes "$PROXMOX" "pct exec $CT -- env SITE_HOST=$SITE_HOST TUNNEL_PEER=$TUNNEL_PEER bash $CT_SCRIPT google-set"
 }
 
 main() {

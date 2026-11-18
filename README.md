@@ -208,6 +208,7 @@ Google only accepts plain `http` redirects for `localhost`, so open it as
 | `TOKEN_KEY_FILE` | The key that encrypts Google tokens in the database. Default `DATA_DIR/token.key`, made on first start (mode 600). On the server it is `/etc/mail-sorter/token.key`, made by `deploy.sh`, so a copy of the data folder alone does not reveal tokens. Losing or changing the key signs everyone out (they just sign in again). |
 | `ALLOWED_ACCOUNTS` | Optional comma separated Gmail addresses. When set, anyone else is refused after Google sign-in and their token is revoked straight away, every request is checked against it, and at start-up the tokens and sessions of accounts no longer listed are deleted. In Testing mode Google's test user list already limits who can sign in. Set it before pressing **Publish app**. |
 | `SECRET_KEY` | Optional. Without it a random key is made once in `DATA_DIR/secret_key`. Shorter than 32 bytes stops the app. |
+| `TRUSTED_PROXIES` | Optional comma separated addresses or networks of the proxy in front, such as `127.0.0.1,::1` for Caddy on the same host. Only requests from these carry a believed `CF-Connecting-IP` for the sign-in limit; without it every request counts as the address it came from. A network with host bits set, or one that reaches public addresses, stops the app at start-up. |
 
 ---
 
@@ -229,8 +230,9 @@ reads the account's address from Gmail's `users.getProfile`, and starts a
 session. Signing in again revokes the earlier refresh token at Google; if
 that also ends the new one, the page asks you to sign in once more. Every
 `/auth/` path allows 30 requests a minute per address (the visitor's
-address from Cloudflare's `CF-Connecting-IP`, trusted only when the request
-came through Caddy on the same host).
+address from Cloudflare's `CF-Connecting-IP`, believed only when the request
+came from a proxy listed in `TRUSTED_PROXIES`; the shipped Caddy block removes
+that header unless the request came from the tunnel at `TUNNEL_PEER`).
 
 **Tokens and sessions.** Access and refresh tokens are encrypted with
 Fernet (`cryptography`) before they are written to SQLite. Access tokens are
@@ -335,6 +337,7 @@ fill it in:
 | `PROXMOX` | The ssh host name of the Proxmox machine. |
 | `CT` | The number of the container that runs Caddy. |
 | `SITE_HOST` | The host name Mail Sorter is served on, like `mail.example.com`; `PUBLIC_URL` becomes `https://SITE_HOST` on a first install. |
+| `TUNNEL_PEER` | The address the Cloudflare tunnel (cloudflared) reaches Caddy from. The Caddy block removes `CF-Connecting-IP` from every other request. |
 
 What it sets up, next to the other apps behind the same Caddy:
 
@@ -342,7 +345,7 @@ What it sets up, next to the other apps behind the same Caddy:
 |---|---|
 | Code and venv | `/opt/mail-sorter` (root owned) |
 | Data | `/var/lib/mail-sorter` (user `mail-sorter`, mode 700) |
-| Settings | `/etc/mail-sorter/mail-sorter.env` (root:mail-sorter 640), from `deploy/mail-sorter.env`, Google client empty |
+| Settings | `/etc/mail-sorter/mail-sorter.env` (root:mail-sorter 640), from `deploy/mail-sorter.env`, Google client empty; an older file without `TRUSTED_PROXIES` gets that line added by `apply` |
 | Token key | `/etc/mail-sorter/token.key` (root:mail-sorter 640), made once by `apply` |
 | Service | `mail-sorter.service` from `deploy/mail-sorter.service`, on `127.0.0.1` at `PORT` (8101, the next after 8097 to 8100), sandboxed, `MemoryMax=256M` |
 | Caddy | the `http://SITE_HOST` block from `deploy/Caddyfile.mail-sorter`, between `# >>> mail-sorter block, ...` and `# <<< mail-sorter block`, with the port and the host filled in |

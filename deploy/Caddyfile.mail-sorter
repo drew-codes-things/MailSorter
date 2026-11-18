@@ -1,5 +1,7 @@
 
 http://__SITE_HOST__ {
+	@not_from_tunnel not remote_ip __TUNNEL_PEER__
+	request_header @not_from_tunnel -Cf-Connecting-Ip
 	request_body {
 		max_size 1MB
 	}

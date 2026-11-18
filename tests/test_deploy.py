@@ -22,7 +22,8 @@ TASKS_BLOCK = ("\n# >>> tasks block, added and removed by the tasks deploy.sh\nh
                "\treverse_proxy 127.0.0.1:8100\n}\n# <<< tasks block\n")
 CLIENT_ID = "123456-abcdef.apps.googleusercontent.com"
 CLIENT_SECRET = "GOCSPX-Secret_Value-123"
-LAPTOP_SITE = {"PROXMOX": "proxmox-host", "CT": "4242", "SITE_HOST": HOST}
+TUNNEL = "192.0.2.53"
+LAPTOP_SITE = {"PROXMOX": "proxmox-host", "CT": "4242", "SITE_HOST": HOST, "TUNNEL_PEER": TUNNEL}
 LAPTOP_STUB = '#!/bin/sh\necho "$(basename "$0") $*" >> "$STUB_LOG"\n'
 
 STUBS = {
@@ -145,7 +146,7 @@ class Box:
 
     def environment(self) -> dict:
         return {**os.environ, "PATH": f"{self.stubs}:{os.environ['PATH']}", "STUB_LOG": str(self.log),
-                "BOX": str(self.flags), "LOCK_PATH": str(self.lock), "SITE_HOST": HOST}
+                "BOX": str(self.flags), "LOCK_PATH": str(self.lock), "SITE_HOST": HOST, "TUNNEL_PEER": TUNNEL}
 
     def apply(self, label: str) -> subprocess.CompletedProcess:
         self.builds += 1
@@ -200,6 +201,26 @@ def test_the_env_file_and_token_key_are_made_once_and_kept(box):
     assert box.apply("v2").returncode == 0
     assert box.token_key.read_bytes().strip() == key
     assert "ALLOWED_ACCOUNTS=drew@example.com" in box.env_file.read_text()
+
+
+def test_an_env_file_from_before_trusted_proxies_gets_that_line_once(box):
+    assert box.apply("v1").returncode == 0
+    older = re.sub(r"^TRUSTED_PROXIES=.*\n", "", box.env_file.read_text(), flags=re.MULTILINE) + "ALLOWED_ACCOUNTS=a@example.com"
+    box.env_file.write_text(older)
+    result = box.apply("v2")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "TRUSTED_PROXIES=127.0.0.1,::1 added" in result.stdout
+    assert box.env_file.read_text() == older + "\nTRUSTED_PROXIES=127.0.0.1,::1\n"
+    assert stat.S_IMODE(box.env_file.stat().st_mode) == 0o640
+    assert box.apply("v3").returncode == 0
+    assert box.env_file.read_text().count("TRUSTED_PROXIES=") == 1
+
+
+def test_the_block_drops_the_cloudflare_address_unless_the_tunnel_sent_the_request(box):
+    assert box.apply("v1").returncode == 0
+    own = box.caddyfile.read_text().split(f"# >>> {OWN} block")[1]
+    assert f"\t@not_from_tunnel not remote_ip {TUNNEL}\n\trequest_header @not_from_tunnel -Cf-Connecting-Ip\n" in own
+    assert "__" not in own
 
 
 def test_caddy_is_validated_and_reloaded_while_the_shared_lock_is_held_then_released(box):
@@ -360,6 +381,11 @@ def test_the_port_is_free_of_the_other_apps_and_named_once():
     assert str(PORT) not in (REPO / "deploy.sh").read_text()
 
 
+def test_the_shipped_env_file_trusts_only_caddy_on_this_host():
+    env = (REPO / "deploy" / f"{OWN}.env").read_text()
+    assert re.findall(r"^TRUSTED_PROXIES=(.*)$", env, flags=re.MULTILINE) == ["127.0.0.1,::1"]
+
+
 def test_the_shipped_env_file_has_no_google_client_in_it():
     env = (REPO / "deploy" / f"{OWN}.env").read_text()
     assert re.findall(r"^GOOGLE_CLIENT_(?:ID|SECRET)=(.*)$", env, flags=re.MULTILINE) == ["", ""]
@@ -401,6 +427,8 @@ def test_the_shipped_files_leave_the_site_host_to_deploy_site_env():
     env = (REPO / "deploy" / f"{OWN}.env").read_text()
     assert re.search(r"^PUBLIC_URL=https://__SITE_HOST__$", env, flags=re.MULTILINE)
     assert (REPO / "deploy" / f"Caddyfile.{OWN}").read_text().startswith("\nhttp://__SITE_HOST__ {\n")
+    assert "not remote_ip __TUNNEL_PEER__\n" in (REPO / "deploy" / f"Caddyfile.{OWN}").read_text()
+    assert re.findall(r"^TUNNEL_PEER=(.*)$", (REPO / "deploy" / "site.env.example").read_text(), flags=re.MULTILINE) == [""]
 
 
 def run_laptop_side(tmp_path, site_text):
@@ -428,14 +456,16 @@ def test_the_laptop_side_refuses_without_the_site_file(tmp_path):
     assert calls == ""
 
 
-def test_the_laptop_side_passes_the_site_host_to_the_container(tmp_path):
+def test_the_laptop_side_passes_the_site_values_to_the_container(tmp_path):
     site_text = "".join(f"{name}={value}\n" for name, value in LAPTOP_SITE.items())
     result, calls = run_laptop_side(tmp_path, site_text)
     assert result.returncode == 0, result.stdout + result.stderr
-    assert f"ssh -o BatchMode=yes proxmox-host pct exec 4242 -- env SITE_HOST={HOST} bash /root/{OWN}-deploy-ct.sh check" in calls
+    assert (f"ssh -o BatchMode=yes proxmox-host pct exec 4242 -- env SITE_HOST={HOST} TUNNEL_PEER={TUNNEL} "
+            f"bash /root/{OWN}-deploy-ct.sh check") in calls
 
 
-@pytest.mark.parametrize("name, value", [("SITE_HOST", "mail.example.com;reboot"), ("CT", ""), ("PROXMOX", "proxmox host")])
+@pytest.mark.parametrize("name, value", [("SITE_HOST", "mail.example.com;reboot"), ("CT", ""), ("PROXMOX", "proxmox host"),
+                                         ("TUNNEL_PEER", ""), ("TUNNEL_PEER", "192.0.2.0/24")])
 def test_the_laptop_side_refuses_a_site_value_that_is_not_plain(tmp_path, name, value):
     site_text = "".join(f"{key}={value if key == name else default}\n" for key, default in LAPTOP_SITE.items())
     result, calls = run_laptop_side(tmp_path, site_text)

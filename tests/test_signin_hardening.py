@@ -42,7 +42,7 @@ def test_sign_in_requests_are_limited_per_address(app, google, clock):
     assert attacker.get("/auth/google").headers["Location"].startswith(google.endpoints.authorize)
 
 
-def test_the_cloudflare_address_counts_only_when_caddy_on_this_host_sent_the_request(app, google):
+def test_the_cloudflare_address_counts_only_when_a_trusted_proxy_sent_the_request(app, google):
     lan = app.test_client()
     lan.environ_base["REMOTE_ADDR"] = LAN_PEER
     for number in range(30):
@@ -50,6 +50,26 @@ def test_the_cloudflare_address_counts_only_when_caddy_on_this_host_sent_the_req
         assert lan.get("/auth/google").headers["Location"].startswith(google.endpoints.authorize)
     lan.environ_base["HTTP_CF_CONNECTING_IP"] = "198.51.100.200"
     assert lan.get("/auth/google").headers["Location"] == "/?why=slow"
+
+
+def test_without_trusted_proxies_the_cloudflare_address_is_never_read(settings, store, google, clock, sleeper):
+    app = make_app(replace(settings, trusted_proxies=()), store, google, clock, sleeper)
+    loopback = app.test_client()
+    for number in range(30):
+        loopback.environ_base["HTTP_CF_CONNECTING_IP"] = f"198.51.100.{number}"
+        assert loopback.get("/auth/google").headers["Location"].startswith(google.endpoints.authorize)
+    loopback.environ_base["HTTP_CF_CONNECTING_IP"] = "198.51.100.200"
+    assert loopback.get("/auth/google").headers["Location"] == "/?why=slow"
+
+
+def test_without_trusted_proxies_nobody_can_use_up_a_visitor_s_sign_in_requests(settings, store, google, clock, sleeper):
+    app = make_app(replace(settings, trusted_proxies=()), store, google, clock, sleeper)
+    spoofer = from_address(app.test_client(), VICTIM_ADDRESS)
+    for _ in range(30):
+        spoofer.get("/auth/google")
+    visitor = app.test_client()
+    visitor.environ_base["REMOTE_ADDR"] = VICTIM_ADDRESS
+    assert visitor.get("/auth/google").headers["Location"].startswith(google.endpoints.authorize)
 
 
 def test_signing_out_is_limited_too(drew):
