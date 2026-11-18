@@ -1,0 +1,23 @@
+[project]
+name = "mail-sorter"
+dynamic = ["version"]
+description = "Self-hosted Gmail inbox sorter: sign in with Google, then keep, bin or save for later one email at a time"
+requires-python = ">=3.11"
+license = "MIT"
+dependencies = ["flask==3.1.3", "waitress==3.0.2", "nh3==0.3.7", "cryptography==50.0.2"]
+
+[project.optional-dependencies]
+dev = ["pytest==9.1.1"]
+
+[tool.setuptools.dynamic]
+version = { attr = "mailsorter.__version__" }
+
+[tool.setuptools.packages.find]
+include = ["mailsorter*"]
+
+[tool.setuptools.package-data]
+mailsorter = ["static/*", "static/fonts/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = [".", "tests"]

@@ -1,0 +1,32 @@
+[Unit]
+Description=Mail Sorter (self-hosted Gmail inbox sorter)
+After=network.target
+
+[Service]
+Type=simple
+User=mail-sorter
+Group=mail-sorter
+WorkingDirectory=/opt/mail-sorter
+EnvironmentFile=/etc/mail-sorter/mail-sorter.env
+ExecStart=/opt/mail-sorter/.venv/bin/python -m mailsorter
+Restart=on-failure
+RestartSec=3
+RestartPreventExitStatus=2
+UMask=0077
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+MemoryMax=256M
+CapabilityBoundingSet=
+ReadWritePaths=/var/lib/mail-sorter
+
+[Install]
+WantedBy=multi-user.target

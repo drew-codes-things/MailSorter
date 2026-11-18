@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#19191c">
+<title>Mail Sorter</title>
+<link rel="icon" href="/static/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/static/app.css">
+<script src="/static/app.js" defer></script>
+</head>
+<body class="sorter">
+<header class="topbar">
+  <a class="brand" href="/" aria-label="Mail Sorter home">
+    <img src="/static/icon.svg" alt="" width="28" height="28">
+    <span class="brand-name">Mail Sorter</span>
+  </a>
+  <div class="view-switch" role="group" aria-label="Which emails">
+    <button class="btn ghost small" type="button" data-view="inbox" aria-pressed="true">Inbox</button>
+    <button class="btn ghost small" type="button" data-view="later" aria-pressed="false">Later</button>
+  </div>
+  <span class="counter" id="counter" aria-live="polite"></span>
+  <span class="spacer"></span>
+  <button class="icon-btn" type="button" id="undo" title="Undo the last choice (U)" aria-label="Undo the last choice">
+    <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5"/></svg>
+  </button>
+  <button class="icon-btn" type="button" id="keys-btn" title="Keyboard keys (?)" aria-label="Keyboard keys">?</button>
+  <button class="btn ghost small" type="button" id="sign-out" title="Signed in as {{account}}">Sign out</button>
+</header>
+
+<main class="stage" id="stage">
+  <article class="card" id="card" hidden aria-labelledby="subject">
+    <div class="card-head" id="card-head">
+      <div class="head-row">
+        <span class="from-name" id="from-name"></span>
+        <time class="date" id="date"></time>
+      </div>
+      <div class="from-address" id="from-address"></div>
+      <h1 class="subject" id="subject"></h1>
+      <div class="badges">
+        <span class="badge later-badge" id="later-badge" hidden>Later</span>
+      </div>
+      <ul class="attachments" id="attachments" aria-label="Attachments" hidden></ul>
+      <p class="swipe-help">Swipe this part: right keeps, left bins, up is later.</p>
+    </div>
+    <div class="images-bar" id="images-bar" hidden>
+      <span id="images-text"></span>
+      <button class="btn ghost small" type="button" id="show-images">Show images</button>
+    </div>
+    <iframe class="email-frame" id="email-frame" title="Email text" sandbox="allow-popups allow-popups-to-escape-sandbox" referrerpolicy="no-referrer"></iframe>
+    <div class="stamp stamp-yes" aria-hidden="true">Keep</div>
+    <div class="stamp stamp-no" aria-hidden="true">Bin</div>
+    <div class="stamp stamp-later" aria-hidden="true">Later</div>
+  </article>
+
+  <section class="notice" id="loading" aria-live="polite">
+    <p>Loading your inbox...</p>
+  </section>
+  <section class="notice" id="empty" hidden>
+    <h1 class="notice-title" id="empty-title">All sorted</h1>
+    <p id="empty-text">Nothing left in your inbox to sort.</p>
+    <button class="btn ghost" type="button" id="empty-later" hidden>Go through Later</button>
+    <button class="btn ghost" type="button" id="refresh">Check again</button>
+  </section>
+  <section class="notice" id="problem" hidden role="alert">
+    <h1 class="notice-title">Something went wrong</h1>
+    <p id="problem-text"></p>
+    <button class="btn" type="button" id="retry">Try again</button>
+  </section>
+</main>
+
+<footer class="choices" id="choices">
+  <button class="choice choice-no" type="button" id="choose-no" disabled>
+    <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>
+    <span>No</span><small>to the Bin</small>
+  </button>
+  <button class="choice choice-later" type="button" id="choose-later" disabled>
+    <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 7v5l3 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"/></svg>
+    <span>Later</span><small>ask again</small>
+  </button>
+  <button class="choice choice-yes" type="button" id="choose-yes" disabled>
+    <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>
+    <span>Yes</span><small>keep it</small>
+  </button>
+</footer>
+
+<div class="toast" id="toast" role="status" hidden>
+  <span id="toast-text"></span>
+  <button class="toast-undo" type="button" id="toast-undo" hidden>Undo</button>
+</div>
+
+<dialog class="dialog" id="keys-dialog">
+  <form method="dialog">
+    <h2 class="dialog-title">Keyboard keys</h2>
+    <dl class="keys">
+      <dt><kbd>&rarr;</kbd> <kbd>Y</kbd></dt><dd>Yes, keep it</dd>
+      <dt><kbd>&larr;</kbd> <kbd>N</kbd></dt><dd>No, move it to the Bin</dd>
+      <dt><kbd>&uarr;</kbd> <kbd>L</kbd></dt><dd>Later</dd>
+      <dt><kbd>U</kbd> <kbd>Ctrl</kbd>+<kbd>Z</kbd></dt><dd>Undo the last choice</dd>
+      <dt><kbd>I</kbd></dt><dd>Show this email's images</dd>
+      <dt><kbd>?</kbd></dt><dd>This list</dd>
+    </dl>
+    <div class="dialog-actions"><button class="btn ghost" value="close">Close</button></div>
+  </form>
+</dialog>
+</body>
+</html>

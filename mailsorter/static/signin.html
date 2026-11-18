@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#19191c">
+<title>Mail Sorter: sign in</title>
+<link rel="icon" href="/static/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body class="plain-page">
+<main class="sign-card">
+  <img src="/static/icon.svg" alt="" width="56" height="56">
+  <h1 class="sign-title">Mail Sorter</h1>
+  <p class="sign-lead">Go through your Gmail inbox one email at a time: keep it, bin it, or leave it for later.</p>
+  <p class="sign-reason" id="reason" role="status">{{reason}}</p>
+  <a class="btn send big" href="/auth/google" id="google-sign-in">Sign in with Google</a>
+  <p class="sign-small">Mail Sorter asks Google for one permission, Gmail's "modify" access. Google words it broadly, but Mail Sorter only reads your inbox, adds its two labels and moves mail to the Bin. That permission cannot delete mail for good, and binned mail stays in Gmail's Bin for 30 days.</p>
+</main>
+</body>
+</html>
